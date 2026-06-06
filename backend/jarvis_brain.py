@@ -590,18 +590,48 @@ class JarvisBrain:
     response events back to the caller.
     """
 
-    def __init__(self, cfg: Optional[JarvisConfig] = None) -> None:
+    def __init__(self, cfg: Optional[JarvisConfig] = None, session_id: str = "default") -> None:
         self.config = cfg or config
+        self.session_id = session_id
+
+        # Initialize database and load history
+        import database
+        database.init_db()
+        history = database.load_messages(session_id=self.session_id, limit=self.config.max_history_messages)
+
         self.conversation_history: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_PROMPT}
         ]
+
+        # Populate conversation history with stored messages
+        for msg in history:
+            self.conversation_history.append(msg)
+
         self.max_tool_iterations = 10  # safety limit for tool-call loops
 
     def clear_history(self) -> None:
-        """Reset conversation to just the system prompt."""
+        """Reset conversation to just the system prompt and clear database."""
         self.conversation_history = [
             {"role": "system", "content": SYSTEM_PROMPT}
         ]
+        import database
+        database.init_db()
+        client = database.get_supabase_client()
+        if client:
+            try:
+                client.table("jarvis_memory").delete().eq("session_id", self.session_id).execute()
+            except Exception as exc:
+                logger.error("Failed to clear Supabase history: %s", exc)
+        else:
+            try:
+                import sqlite3
+                conn = sqlite3.connect(database.SQLITE_DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM jarvis_memory WHERE session_id = ?", (self.session_id,))
+                conn.commit()
+                conn.close()
+            except Exception as exc:
+                logger.error("Failed to clear SQLite history: %s", exc)
 
     def _trim_history(self) -> None:
         """Keep conversation within the configured window."""
@@ -640,24 +670,43 @@ class JarvisBrain:
         self.conversation_history.append({"role": "user", "content": user_content})
         self._trim_history()
 
+        # Save user message to database
+        import database
+        database.save_message("user", user_message, session_id=self.session_id)
+
         yield {"type": "thinking"}
 
         # Provider dispatch
         provider = self.config.llm_provider
+        response_text = ""
+
         if provider == "openai":
             async for event in self._process_openai():
+                if event.get("type") == "response":
+                    response_text += event.get("content", "")
                 yield event
         elif provider == "gemini":
             async for event in self._process_gemini():
+                if event.get("type") == "response":
+                    response_text += event.get("content", "")
                 yield event
         elif provider == "anthropic":
             async for event in self._process_anthropic():
+                if event.get("type") == "response":
+                    response_text += event.get("content", "")
                 yield event
         elif provider == "ollama":
             async for event in self._process_ollama():
+                if event.get("type") == "response":
+                    response_text += event.get("content", "")
                 yield event
         else:
             yield {"type": "response", "content": f"Unknown LLM provider: {provider}"}
+
+        # Save assistant response to database
+        if response_text:
+            import database
+            database.save_message("assistant", response_text, session_id=self.session_id)
 
         yield {"type": "done"}
 

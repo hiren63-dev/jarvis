@@ -43,6 +43,10 @@ class JarvisConfig:
     # ── Conversation ──────────────────────────────────────────────────────
     max_history_messages: int = 50  # rolling window for context
 
+    # ── Supabase Database ─────────────────────────────────────────────────
+    supabase_url: Optional[str] = None
+    supabase_key: Optional[str] = None
+
     def __post_init__(self) -> None:
         """Resolve API keys from environment and auto-detect the best provider."""
         self.openai_api_key = self.openai_api_key or os.environ.get("OPENAI_API_KEY")
@@ -54,6 +58,8 @@ class JarvisConfig:
         self.anthropic_api_key = self.anthropic_api_key or os.environ.get(
             "ANTHROPIC_API_KEY"
         )
+        self.supabase_url = self.supabase_url or os.environ.get("SUPABASE_URL")
+        self.supabase_key = self.supabase_key or os.environ.get("SUPABASE_KEY")
 
         # Auto-detect provider when the default (OpenAI) key is missing
         if not self.openai_api_key and self.gemini_api_key:
