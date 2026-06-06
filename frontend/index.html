@@ -12,13 +12,53 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Settings -->
-  <button class="settings-btn" id="settings-btn" aria-label="Settings">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="3"/>
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-    </svg>
-  </button>
+  <!-- Top bar -->
+  <div class="top-bar">
+    <span class="brand">JARVIS</span>
+    <span class="model-badge" id="model-badge" title="Active provider and model">–</span>
+    <button class="settings-btn" id="settings-btn" aria-label="Settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="settings-panel" id="settings-panel" role="dialog" aria-label="Settings">
+    <div class="settings-header">
+      <h2>Settings</h2>
+      <button class="settings-close" id="settings-close" aria-label="Close settings">✕</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-section">
+        <h3>Session</h3>
+        <button class="setting-action-btn" id="clear-btn">🗑 Clear Conversation</button>
+      </div>
+      <div class="settings-section">
+        <h3>API Costs</h3>
+        <p class="cost-summary" id="cost-summary">Loading…</p>
+        <a class="setting-link" href="/api/costs" target="_blank">View full cost breakdown ↗</a>
+      </div>
+      <div class="settings-section">
+        <h3>Keyboard Shortcuts</h3>
+        <table class="shortcut-table">
+          <tr><td><kbd>Enter</kbd></td><td>Send message</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>Toggle voice (when not typing)</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Stop recording / close panel</td></tr>
+          <tr><td><kbd>Click bubble</kbd></td><td>Copy Jarvis response</td></tr>
+        </table>
+      </div>
+      <div class="settings-section">
+        <h3>API Endpoints (for n8n)</h3>
+        <code class="endpoint">POST /api/process</code>
+        <code class="endpoint">DELETE /api/session/:id</code>
+        <code class="endpoint">GET /api/costs</code>
+        <a class="setting-link" href="/docs" target="_blank">API docs ↗</a>
+      </div>
+    </div>
+  </div>
+  <div class="settings-overlay" id="settings-overlay"></div>
 
   <!-- Main Container -->
   <main class="dashboard">
@@ -35,26 +75,24 @@
 
     <!-- Status -->
     <div class="status-container">
-      <p class="status-text" id="status-text">Initializing...</p>
+      <p class="status-text" id="status-text">Initializing…</p>
     </div>
 
     <!-- Chat Area -->
     <div class="chat-container" id="chat-container">
-      <div class="chat-messages" id="chat-messages">
-        <!-- Messages will be injected here -->
-      </div>
+      <div class="chat-messages" id="chat-messages"></div>
     </div>
 
     <!-- Input Bar -->
     <div class="input-bar">
       <div class="input-wrapper">
-        <input
-          type="text"
+        <textarea
           id="message-input"
-          placeholder="Ask Jarvis anything..."
+          placeholder="Ask Jarvis anything… (Enter to send, Shift+Enter for newline)"
           autocomplete="off"
           spellcheck="true"
-        />
+          rows="1"
+        ></textarea>
         <button class="send-btn" id="send-btn" aria-label="Send message">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"/>
@@ -73,9 +111,7 @@
     </div>
   </main>
 
-  <!-- TTS Audio -->
   <audio id="tts-audio" preload="none"></audio>
-
   <script src="app.js"></script>
 </body>
 </html>

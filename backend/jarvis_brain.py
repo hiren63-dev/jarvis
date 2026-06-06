@@ -290,19 +290,26 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 
 
 async def _tool_capture_screen() -> dict[str, Any]:
-    """Capture the primary monitor and return base64 PNG."""
+    """Capture the primary monitor, compress, and return base64 JPEG."""
     try:
         import mss  # type: ignore[import-untyped]
         from PIL import Image
 
         with mss.mss() as sct:
-            monitor = sct.monitors[1]  # primary monitor
+            monitor = sct.monitors[1]
             shot = sct.grab(monitor)
             img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
-            buf = io.BytesIO()
-            img.save(buf, format="PNG", optimize=True)
-            b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-            return {"success": True, "image": b64, "width": img.width, "height": img.height}
+
+        # Resize to max width to reduce payload (8MB PNG → ~150KB JPEG)
+        max_w = config.screenshot_max_width
+        if img.width > max_w:
+            ratio = max_w / img.width
+            img = img.resize((max_w, int(img.height * ratio)), Image.LANCZOS)
+
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=config.screenshot_quality, optimize=True)
+        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return {"success": True, "image": b64, "width": img.width, "height": img.height}
     except Exception as exc:
         return {"success": False, "error": str(exc)}
 
@@ -578,6 +585,18 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return {"success": False, "error": f"Invalid arguments for {name}: {exc}"}
 
 
+async def execute_tool_with_timeout(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Execute a tool with a configurable timeout to prevent hangs."""
+    try:
+        return await asyncio.wait_for(
+            execute_tool(name, arguments),
+            timeout=config.tool_timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Tool '%s' timed out after %ds", name, config.tool_timeout)
+        return {"success": False, "error": f"Tool '{name}' timed out after {config.tool_timeout}s"}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # JarvisBrain — Multi-provider LLM brain
 # ─────────────────────────────────────────────────────────────────────────────
@@ -611,27 +630,9 @@ class JarvisBrain:
 
     def clear_history(self) -> None:
         """Reset conversation to just the system prompt and clear database."""
-        self.conversation_history = [
-            {"role": "system", "content": SYSTEM_PROMPT}
-        ]
+        self.conversation_history = [{"role": "system", "content": SYSTEM_PROMPT}]
         import database
-        database.init_db()
-        client = database.get_supabase_client()
-        if client:
-            try:
-                client.table("jarvis_memory").delete().eq("session_id", self.session_id).execute()
-            except Exception as exc:
-                logger.error("Failed to clear Supabase history: %s", exc)
-        else:
-            try:
-                import sqlite3
-                conn = sqlite3.connect(database.SQLITE_DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM jarvis_memory WHERE session_id = ?", (self.session_id,))
-                conn.commit()
-                conn.close()
-            except Exception as exc:
-                logger.error("Failed to clear SQLite history: %s", exc)
+        database.delete_session(self.session_id)
 
     def _trim_history(self) -> None:
         """Keep conversation within the configured window."""
@@ -746,7 +747,7 @@ class JarvisBrain:
 
                     yield {"type": "action", "description": f"Calling {fn_name}({fn_args})"}
 
-                    result = await execute_tool(fn_name, fn_args)
+                    result = await execute_tool_with_timeout(fn_name, fn_args)
 
                     # If it was a screenshot, emit the image event
                     if fn_name == "capture_screen" and result.get("success") and result.get("image"):
@@ -843,7 +844,7 @@ class JarvisBrain:
 
                     yield {"type": "action", "description": f"Calling {fn_name}({fn_args})"}
 
-                    result = await execute_tool(fn_name, fn_args)
+                    result = await execute_tool_with_timeout(fn_name, fn_args)
 
                     if fn_name == "capture_screen" and result.get("success") and result.get("image"):
                         yield {"type": "screenshot", "image": result["image"]}
@@ -957,7 +958,7 @@ class JarvisBrain:
 
                     yield {"type": "action", "description": f"Calling {block.name}({block.input})"}
 
-                    result = await execute_tool(block.name, block.input)
+                    result = await execute_tool_with_timeout(block.name, block.input)
 
                     if block.name == "capture_screen" and result.get("success") and result.get("image"):
                         yield {"type": "screenshot", "image": result["image"]}
@@ -1020,7 +1021,7 @@ class JarvisBrain:
 
                         yield {"type": "action", "description": f"Calling {fn_name}({fn_args})"}
 
-                        result = await execute_tool(fn_name, fn_args)
+                        result = await execute_tool_with_timeout(fn_name, fn_args)
 
                         if fn_name == "capture_screen" and result.get("success") and result.get("image"):
                             yield {"type": "screenshot", "image": result["image"]}
@@ -1088,7 +1089,7 @@ class JarvisBrain:
 
                         yield {"type": "action", "description": f"Calling {fn_name}({fn_args})"}
 
-                        result = await execute_tool(fn_name, fn_args)
+                        result = await execute_tool_with_timeout(fn_name, fn_args)
 
                         if fn_name == "capture_screen" and result.get("success") and result.get("image"):
                             yield {"type": "screenshot", "image": result["image"]}
