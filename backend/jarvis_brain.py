@@ -685,6 +685,11 @@ class JarvisBrain:
                 if event.get("type") == "response":
                     response_text += event.get("content", "")
                 yield event
+        elif provider == "openrouter":
+            async for event in self._process_openrouter():
+                if event.get("type") == "response":
+                    response_text += event.get("content", "")
+                yield event
         elif provider == "gemini":
             async for event in self._process_gemini():
                 if event.get("type") == "response":
@@ -1040,3 +1045,66 @@ class JarvisBrain:
             text = response.choices[0].message.content or ""
             self.conversation_history.append({"role": "assistant", "content": text})
             yield {"type": "response", "content": text}
+
+    # ── OpenRouter ────────────────────────────────────────────────────────
+
+    async def _process_openrouter(self) -> AsyncGenerator[dict[str, Any], None]:
+        """Process with OpenRouter's chat completions + function calling."""
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            yield {"type": "response", "content": "openai library not installed. Run: pip install openai"}
+            return
+
+        client = AsyncOpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=self.config.openrouter_api_key,
+            default_headers={
+                "HTTP-Referer": "https://github.com/hiren63-dev/jarvis",
+                "X-Title": "Jarvis AI Assistant",
+            }
+        )
+
+        for _ in range(self.max_tool_iterations):
+            try:
+                response = await client.chat.completions.create(
+                    model=self.config.model,
+                    messages=self.conversation_history,  # type: ignore[arg-type]
+                    tools=TOOL_DEFINITIONS,
+                    tool_choice="auto",
+                )
+                msg = response.choices[0].message
+
+                if msg.tool_calls:
+                    # Model expects tool calls to be saved as dicts
+                    self.conversation_history.append(msg.model_dump())
+
+                    for tc in msg.tool_calls:
+                        fn_name = tc.function.name
+                        try:
+                            fn_args = json.loads(tc.function.arguments)
+                        except json.JSONDecodeError:
+                            fn_args = {}
+
+                        yield {"type": "action", "description": f"Calling {fn_name}({fn_args})"}
+
+                        result = await execute_tool(fn_name, fn_args)
+
+                        if fn_name == "capture_screen" and result.get("success") and result.get("image"):
+                            yield {"type": "screenshot", "image": result["image"]}
+
+                        self.conversation_history.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps(result),
+                        })
+                else:
+                    text = msg.content or ""
+                    self.conversation_history.append({"role": "assistant", "content": text})
+                    yield {"type": "response", "content": text}
+                    return
+            except Exception as exc:
+                logger.error("OpenRouter error: %s", exc)
+                yield {"type": "error", "message": f"OpenRouter API call failed: {exc}"}
+                return
+

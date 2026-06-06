@@ -21,10 +21,11 @@ class JarvisConfig:
     """Master configuration for the Jarvis AI assistant."""
 
     # ── LLM Settings ──────────────────────────────────────────────────────
-    llm_provider: str = "openai"  # openai | gemini | anthropic | ollama
+    llm_provider: str = "openai"  # openai | gemini | anthropic | ollama | openrouter
     openai_api_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
+    openrouter_api_key: Optional[str] = None
     ollama_base_url: str = "http://localhost:11434"
     model: str = "gpt-4o"  # default model per provider
 
@@ -49,6 +50,10 @@ class JarvisConfig:
 
     def __post_init__(self) -> None:
         """Resolve API keys from environment and auto-detect the best provider."""
+        # Load LLM settings from env if specified
+        self.llm_provider = os.environ.get("LLM_PROVIDER", self.llm_provider)
+        self.model = os.environ.get("MODEL", self.model)
+
         self.openai_api_key = self.openai_api_key or os.environ.get("OPENAI_API_KEY")
         self.gemini_api_key = (
             self.gemini_api_key
@@ -58,16 +63,26 @@ class JarvisConfig:
         self.anthropic_api_key = self.anthropic_api_key or os.environ.get(
             "ANTHROPIC_API_KEY"
         )
+        self.openrouter_api_key = self.openrouter_api_key or os.environ.get(
+            "OPENROUTER_API_KEY"
+        )
         self.supabase_url = self.supabase_url or os.environ.get("SUPABASE_URL")
         self.supabase_key = self.supabase_key or os.environ.get("SUPABASE_KEY")
 
-        # Auto-detect provider when the default (OpenAI) key is missing
-        if not self.openai_api_key and self.gemini_api_key:
-            self.llm_provider = "gemini"
-            self.model = "gemini-2.0-flash"
-        elif not self.openai_api_key and self.anthropic_api_key:
-            self.llm_provider = "anthropic"
-            self.model = "claude-sonnet-4-20250514"
+        # Auto-detect provider if default is not overridden in env
+        if "LLM_PROVIDER" not in os.environ:
+            if self.openrouter_api_key:
+                self.llm_provider = "openrouter"
+                self.model = "google/gemini-2.0-flash"
+            elif self.openai_api_key:
+                self.llm_provider = "openai"
+                self.model = "gpt-4o"
+            elif self.gemini_api_key:
+                self.llm_provider = "gemini"
+                self.model = "gemini-2.0-flash"
+            elif self.anthropic_api_key:
+                self.llm_provider = "anthropic"
+                self.model = "claude-sonnet-4-20250514"
 
     @property
     def active_api_key(self) -> Optional[str]:
@@ -76,6 +91,7 @@ class JarvisConfig:
             "openai": self.openai_api_key,
             "gemini": self.gemini_api_key,
             "anthropic": self.anthropic_api_key,
+            "openrouter": self.openrouter_api_key,
             "ollama": None,  # Ollama runs locally
         }.get(self.llm_provider)
 
