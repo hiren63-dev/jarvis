@@ -26,10 +26,10 @@ class JarvisConfig:
 
     # ── API Behavior ──────────────────────────────────────────────────────
     max_tokens: int = 4096
-    api_timeout: int = 60        # seconds for LLM API calls
+    api_timeout: int = 45        # seconds for LLM API calls (OpenRouter friendly)
     tool_timeout: int = 30       # seconds per tool execution
-    max_retries: int = 3         # retry failed API calls
-    retry_delay: float = 1.0     # base backoff seconds
+    max_retries: int = 3         # retry failed API calls (exponential backoff)
+    retry_delay: float = 2.0     # base backoff seconds
 
     # ── Voice Settings ────────────────────────────────────────────────────
     tts_voice: str = "en-US-GuyNeural"
@@ -47,15 +47,15 @@ class JarvisConfig:
     max_message_length: int = 10_000
 
     # ── Conversation ──────────────────────────────────────────────────────
-    max_history_messages: int = 50
+    max_history_messages: int = 30  # reduced for faster responses
 
     # ── Cost Tracking ─────────────────────────────────────────────────────
     track_costs: bool = True
     monthly_budget_usd: float = 10.0
 
     # ── Screenshot Settings ───────────────────────────────────────────────
-    screenshot_max_width: int = 1280
-    screenshot_quality: int = 75     # JPEG quality 1-95
+    screenshot_max_width: int = 1024  # reduced for faster transmission
+    screenshot_quality: int = 85      # JPEG quality 1-95 (balanced)
 
     # ── Supabase Database ─────────────────────────────────────────────────
     supabase_url: Optional[str] = None

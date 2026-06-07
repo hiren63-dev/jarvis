@@ -166,6 +166,29 @@ async def api_config() -> JSONResponse:
     })
 
 
+@app.get("/api/sessions")
+async def api_list_sessions() -> JSONResponse:
+    """List all saved sessions."""
+    from session_manager import get_sessions
+    return JSONResponse({"sessions": get_sessions()})
+
+
+@app.post("/api/sessions/{session_id}/rename")
+async def api_rename_session(session_id: str, new_name: str) -> JSONResponse:
+    """Rename a session."""
+    from session_manager import rename_session
+    rename_session(session_id, new_name)
+    return JSONResponse({"success": True, "session_id": session_id, "new_name": new_name})
+
+
+@app.delete("/api/sessions/{session_id}")
+async def api_delete_session(session_id: str) -> JSONResponse:
+    """Delete all data for a session."""
+    from session_manager import delete_session_data
+    delete_session_data(session_id)
+    return JSONResponse({"success": True, "session_id": session_id})
+
+
 # ── WebSocket ─────────────────────────────────────────────────────────────────
 
 @app.websocket("/ws")

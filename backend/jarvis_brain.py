@@ -597,6 +597,30 @@ async def execute_tool_with_timeout(name: str, arguments: dict[str, Any]) -> dic
         return {"success": False, "error": f"Tool '{name}' timed out after {config.tool_timeout}s"}
 
 
+async def api_call_with_retry(coro: Any, description: str = "API call") -> Any:
+    """Execute async function with exponential backoff retry logic."""
+    import asyncio
+    from openai import RateLimitError, APIConnectionError
+
+    for attempt in range(1, config.max_retries + 1):
+        try:
+            return await asyncio.wait_for(coro, timeout=config.api_timeout)
+        except asyncio.TimeoutError:
+            logger.warning("%s attempt %d/%d: timeout after %ds", description, attempt, config.max_retries, config.api_timeout)
+            if attempt == config.max_retries:
+                raise RuntimeError(f"{description} timed out after {config.max_retries} attempts")
+        except (RateLimitError, APIConnectionError) as e:
+            logger.warning("%s attempt %d/%d: %s", description, attempt, config.max_retries, str(e))
+            if attempt == config.max_retries:
+                raise
+            delay = config.retry_delay * (2 ** (attempt - 1))
+            logger.info("Retrying in %.1fs...", delay)
+            await asyncio.sleep(delay)
+        except Exception as e:
+            logger.error("%s failed: %s", description, str(e))
+            raise
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # JarvisBrain — Multi-provider LLM brain
 # ─────────────────────────────────────────────────────────────────────────────
